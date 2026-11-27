@@ -1,0 +1,28 @@
+Tasks (priority order)
+Foundation, spec artifacts, deployment baseline, seed data, README start
+Admin user and role management (3.1)
+Core audit and data integrity (3.2, 3.4, 3.5, Sec. 6)
+Difficulty-ratio exam generation (3.3, 5.2)
+Monitoring and announcements (3.6)
+Grading, review, publication (3.7, 3.8)
+Analytics and question analytics (3.8, 4.5)
+Network-aware interface and resilience (4.1, 5.3)
+Customizable workspace and scratchpad (4.7, 4.8)
+Bulk import (4.4)
+Examination sandbox (4.3)
+PDF reports and verifiable reports (4.2, 4.6)
+Proctoring backend, consent, agent API (5.1)
+Agent: gaze and distance (5.1)
+Phone detection and screen capture (5.1)
+Identity check (5.1, optional)
+Bluetooth earpiece detection (5.5)
+Gemini review with local fallback (5.1, optional)
+Examiner flag review dashboard (3.6, 5.1)
+UI/UX and accessibility pass (Sec. 8)
+Hardening, README, demo script
+Cut-line (drop in order): Task 16, Task 18, screen-clip part of Task 15, Task 17. Tasks 1-12 and 20 cover everything the PDF requires.
+
+Assumptions
+The verify page shows score and masked name; it can be reduced to status, exam and date only.
+The deployed demo uses the agent's simulated mode; the live hardware demo runs from a laptop.
+Gemini's free tier needs a key but not billing; the app is fully functional without it.
