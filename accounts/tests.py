@@ -54,3 +54,16 @@ class RoleLoginTests(TestCase):
         )
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("_auth_user_id", self.client.session)
+
+
+class ProfilePhotoTests(TestCase):
+    def setUp(self):
+        self.candidate = User.objects.create_user(username="candidate", password="password", role=User.Role.CANDIDATE)
+        self.examiner = User.objects.create_user(username="examiner", password="password", role=User.Role.EXAMINER)
+
+    def test_only_candidate_can_reach_private_reference_photo_form(self):
+        url = reverse("accounts:profile-photo")
+        self.client.force_login(self.examiner)
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.client.force_login(self.candidate)
+        self.assertEqual(self.client.get(url).status_code, 200)

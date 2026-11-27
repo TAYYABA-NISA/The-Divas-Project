@@ -44,3 +44,22 @@ class RoleAuthenticationForm(AuthenticationForm):
         if role == User.Role.EXAMINER:
             return user.is_examiner
         return user.is_candidate
+
+
+class ProfilePhotoForm(forms.ModelForm):
+    """Candidate-owned reference photo; used only by the optional local agent."""
+
+    class Meta:
+        model = User
+        fields = ("profile_photo",)
+        widgets = {"profile_photo": forms.ClearableFileInput(attrs={"accept": "image/jpeg,image/png"})}
+
+    def clean_profile_photo(self):
+        photo = self.cleaned_data.get("profile_photo")
+        if not photo:
+            return photo
+        if photo.size > 2 * 1024 * 1024:
+            raise forms.ValidationError("Reference photos must be 2 MB or smaller.")
+        if getattr(photo, "content_type", "") not in {"image/jpeg", "image/png"}:
+            raise forms.ValidationError("Upload a JPEG or PNG reference photo.")
+        return photo

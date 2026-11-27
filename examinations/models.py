@@ -207,6 +207,13 @@ class Enrollment(models.Model):
             raise ValidationError({"candidate": "Only candidate accounts can be enrolled."})
 
 
+class RealAttemptManager(models.Manager):
+    """Default attempt manager for real examination data only."""
+
+    def get_queryset(self):
+        return super().get_queryset().filter(is_sandbox=False)
+
+
 class Attempt(models.Model):
     class Status(models.TextChoices):
         IN_PROGRESS = "IN_PROGRESS", "In progress"
@@ -223,12 +230,20 @@ class Attempt(models.Model):
     total_marks = models.DecimalField(max_digits=8, decimal_places=2, null=True, blank=True)
     draw_seed = models.BigIntegerField(null=True, blank=True)
     last_seen_at = models.DateTimeField(null=True, blank=True)
+    is_sandbox = models.BooleanField(default=False)
+    scratchpad = models.TextField(blank=True)
+    scratchpad_updated_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = RealAttemptManager()
+    all_objects = models.Manager()
 
     class Meta:
         constraints = [
             models.UniqueConstraint(
-                fields=("examination", "candidate"), name="one_attempt_per_candidate_per_exam"
+                fields=("examination", "candidate"),
+                condition=models.Q(is_sandbox=False),
+                name="one_real_attempt_per_candidate_per_exam",
             ),
         ]
 
@@ -271,6 +286,64 @@ class AttemptAnswer(models.Model):
     graded_at = models.DateTimeField(null=True, blank=True)
     client_seq = models.BigIntegerField(default=0)
     saved_at = models.DateTimeField(auto_now=True)
+
+
+class UserPreference(models.Model):
+    """Candidate-controlled workspace settings, stored per user rather than per device."""
+
+    class FontSize(models.TextChoices):
+        SMALL = "SMALL", "Small"
+        NORMAL = "NORMAL", "Normal"
+        LARGE = "LARGE", "Large"
+
+    class Theme(models.TextChoices):
+        STANDARD = "STANDARD", "Standard"
+        HIGH_CONTRAST = "HIGH_CONTRAST", "High contrast"
+
+    class PalettePosition(models.TextChoices):
+        RIGHT = "RIGHT", "Right side"
+        TOP = "TOP", "Above question"
+
+    class Density(models.TextChoices):
+        COMFORTABLE = "COMFORTABLE", "Comfortable"
+        COMPACT = "COMPACT", "Compact"
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="workspace_preference")
+    font_size = models.CharField(max_length=8, choices=FontSize.choices, default=FontSize.NORMAL)
+    theme = models.CharField(max_length=16, choices=Theme.choices, default=Theme.STANDARD)
+    palette_position = models.CharField(max_length=8, choices=PalettePosition.choices, default=PalettePosition.RIGHT)
+    density = models.CharField(max_length=12, choices=Density.choices, default=Density.COMFORTABLE)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class VerifiedReport(models.Model):
+    """A short-lived public verification record; PDFs are rendered on demand."""
+
+    class Type(models.TextChoices):
+        CANDIDATE_RESULT = "CANDIDATE_RESULT", "Candidate result"
+        EXAMINATION_SUMMARY = "EXAMINATION_SUMMARY", "Examination summary"
+
+    class Status(models.TextChoices):
+        VALID = "VALID", "Valid"
+        REVOKED = "REVOKED", "Revoked"
+        SUPERSEDED = "SUPERSEDED", "Superseded"
+
+    public_id = models.CharField(max_length=64, unique=True, db_index=True)
+    report_type = models.CharField(max_length=24, choices=Type.choices)
+    attempt = models.ForeignKey(Attempt, null=True, blank=True, on_delete=models.CASCADE, related_name="verified_reports")
+    examination = models.ForeignKey(Examination, on_delete=models.CASCADE, related_name="verified_reports")
+    data_hash = models.CharField(max_length=64)
+    issued_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.VALID)
+
+    class Meta:
+        ordering = ("-issued_at",)
+
+    def clean(self):
+        if self.report_type == self.Type.CANDIDATE_RESULT and self.attempt_id is None:
+            raise ValidationError({"attempt": "Candidate result reports require an attempt."})
+        if self.attempt_id and self.attempt.examination_id != self.examination_id:
+            raise ValidationError({"attempt": "The attempt must belong to this examination."})
 
 
 class ExaminationEvent(models.Model):

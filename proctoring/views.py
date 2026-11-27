@@ -1,10 +1,10 @@
 import json
 
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
+from django.views.decorators.http import require_GET, require_POST
 
 from accounts.models import User
 from examinations.models import Attempt
@@ -50,6 +50,23 @@ def consent(request, attempt_id):
         except ValidationError as error:
             form.add_error(None, error)
     return render(request, "proctoring/consent.html", {"attempt": attempt, "form": form, "agent_token": token})
+
+
+@csrf_exempt
+@require_GET
+def agent_profile_photo(request):
+    """Return a private reference image only to the active attempt's agent."""
+    try:
+        session = _agent_session(request)
+    except PermissionDenied as error:
+        return JsonResponse({"detail": str(error)}, status=403)
+    photo = session.attempt.candidate.profile_photo
+    if not photo:
+        return JsonResponse({"detail": "No reference photo is enrolled for this attempt."}, status=404)
+    # The response is token-gated and never cached by browsers or proxies.
+    response = FileResponse(photo.open("rb"), content_type="image/jpeg", as_attachment=False)
+    response["Cache-Control"] = "no-store"
+    return response
 
 
 @csrf_exempt

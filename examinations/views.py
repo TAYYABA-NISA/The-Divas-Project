@@ -19,6 +19,8 @@ from .forms import (
     ExamQuestionAssignmentForm,
     GradeForm,
     IncidentForm,
+    BulkImportForm,
+    WorkspacePreferenceForm,
     QuestionChoiceFormSet,
     QuestionForm,
 )
@@ -32,6 +34,8 @@ from .models import (
     ExaminationEvent,
     ExaminationQuestion,
     Question,
+    UserPreference,
+    VerifiedReport,
 )
 from .permissions import role_required
 from .services import (
@@ -51,7 +55,9 @@ from .services import (
     publish_results,
     questions_in_published_pools,
     save_answer,
+    save_scratchpad,
     start_attempt,
+    start_sandbox_attempt,
     touch_attempt,
 )
 

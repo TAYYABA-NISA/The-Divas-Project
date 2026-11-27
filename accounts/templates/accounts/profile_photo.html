@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}Reference photo | Exam Platform{% endblock %}
+{% block content %}
+<section class="card" aria-labelledby="profile-photo-title">
+  <p class="eyebrow">Candidate settings</p>
+  <h1 id="profile-photo-title">Optional identity reference photo</h1>
+  <p>This private JPEG or PNG is available only to your local monitoring agent during an active, consented attempt. A mismatch creates an advisory flag for examiner review and never blocks an exam or changes a score.</p>
+  <p class="notice">Lighting, camera angle, glasses and head coverings can cause false matches. The reference photo and its biometric comparison are never shown in monitoring events.</p>
+  <form method="post" enctype="multipart/form-data" class="stack">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="field">
+      <label for="{{ form.profile_photo.id_for_label }}">{{ form.profile_photo.label }}</label>
+      {{ form.profile_photo }}{{ form.profile_photo.errors }}
+    </div>
+    <button class="btn btn-primary" type="submit">Save private reference photo</button>
+  </form>
+</section>
+{% endblock %}

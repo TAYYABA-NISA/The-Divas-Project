@@ -1,5 +1,6 @@
 import random
 import statistics
+from datetime import timedelta
 from collections import Counter, OrderedDict
 from decimal import ROUND_HALF_UP, Decimal
 
@@ -221,6 +222,79 @@ def start_attempt(*, examination: Examination, candidate, now=None):
     return attempt
 
 
+@transaction.atomic
+def start_sandbox_attempt(*, examination: Examination, examiner, now=None):
+    """Create an examiner-owned preview without touching real candidate data."""
+    now = now or timezone.now()
+    examination = Examination.objects.select_for_update().get(pk=examination.pk)
+    if not examiner.is_examiner or (not examiner.is_superuser and examination.examiner_id != examiner.id):
+        raise PermissionDenied("Only the owning examiner can preview this examination.")
+
+    seed = random.SystemRandom().getrandbits(62)
+    rng = random.Random(seed)
+    items = [
+        (assignment, assignment.question, assignment.assigned_marks)
+        for assignment in ExaminationQuestion.objects.select_related("question")
+        .prefetch_related("question__choices")
+        .filter(examination=examination)
+        .order_by("position", "id")
+    ]
+    blueprint = _blueprint_or_none(examination)
+    if blueprint:
+        # Draft previews use the currently valid pool. Published previews use its frozen pool.
+        if not blueprint.frozen_pool:
+            pool = blueprint_candidate_pool(examination, blueprint)
+            blueprint.frozen_pool = sorted(question_id for ids in pool.values() for question_id in ids)
+        items.extend(
+            (None, question, blueprint.marks_for(question.difficulty))
+            for question in draw_blueprint_questions(blueprint, rng)
+        )
+    if not items:
+        raise ValidationError("Add valid questions before starting a sandbox preview.")
+    if examination.randomize_questions:
+        rng.shuffle(items)
+
+    attempt = Attempt.all_objects.create(
+        examination=examination,
+        candidate=examiner,
+        started_at=now,
+        expires_at=now + timedelta(minutes=examination.duration_minutes),
+        draw_seed=seed,
+        total_marks=_money(sum((marks for _, _, marks in items), Decimal("0.00"))),
+        is_sandbox=True,
+    )
+    for position, (assignment, question, marks) in enumerate(items, start=1):
+        AttemptQuestion.objects.create(
+            attempt=attempt,
+            source_assignment=assignment,
+            source_question=question,
+            position=position,
+            prompt=question.prompt,
+            question_type=question.question_type,
+            difficulty=question.difficulty,
+            marks=marks,
+            choices_snapshot=_snapshot_choices(question, examination.randomize_choices, rng),
+        )
+    return attempt
+
+
+def save_scratchpad(*, attempt: Attempt, owner, text, now=None):
+    """Persist private rough work independently of an answer and never grade it."""
+    text = (text or "")[:10000]
+    now = now or timezone.now()
+    with transaction.atomic():
+        attempt = Attempt.all_objects.select_for_update().get(pk=attempt.pk)
+        if attempt.candidate_id != owner.id:
+            raise PermissionDenied("You cannot edit this scratchpad.")
+        if not attempt.can_accept_answers(now):
+            expire_attempt_if_needed(attempt, now=now)
+            raise PermissionDenied("The scratchpad is closed because the attempt has ended.")
+        attempt.scratchpad = text
+        attempt.scratchpad_updated_at = now
+        attempt.save(update_fields=("scratchpad", "scratchpad_updated_at"))
+    return attempt
+
+
 def save_answer(*, attempt: Attempt, attempt_question_id: int, selected_choice_ids=None,
                 written_response="", marked_for_review=False, client_seq=None, now=None):
     """Save an answer only while the server-side deadline remains open.
@@ -394,6 +468,12 @@ def grade_written_answer(*, answer_id, grader, marks, feedback=""):
     answer.graded_by = grader
     answer.graded_at = timezone.now()
     answer.save(update_fields=("awarded_marks", "grader_feedback", "graded_by", "graded_at", "saved_at"))
+    # A revised mark invalidates any previously issued candidate result report.
+    from .models import VerifiedReport
+    VerifiedReport.objects.filter(
+        attempt=attempt, report_type=VerifiedReport.Type.CANDIDATE_RESULT,
+        status=VerifiedReport.Status.VALID,
+    ).update(status=VerifiedReport.Status.SUPERSEDED)
     recompute_attempt_total(Attempt.objects.select_for_update().get(pk=attempt.pk))
     return answer
 
