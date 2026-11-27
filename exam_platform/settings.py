@@ -16,6 +16,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "accounts",
     "examinations",
+    "proctoring",
 ]
 
 MIDDLEWARE = [
@@ -80,6 +81,8 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+PROCTOR_EVIDENCE_ROOT = Path(os.environ.get("PROCTOR_EVIDENCE_ROOT", BASE_DIR / "private_proctor_evidence"))
+PROCTOR_PROFILE_ROOT = Path(os.environ.get("PROCTOR_PROFILE_ROOT", BASE_DIR / "private_profile_photos"))
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 if not DEBUG:

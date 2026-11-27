@@ -18,7 +18,10 @@ from proctoring.services import record_consent
 class ProctoringViewsTests(TestCase):
     def setUp(self):
         self.evidence_root = tempfile.mkdtemp()
-        self.settings_override = override_settings(PROCTOR_EVIDENCE_ROOT=self.evidence_root)
+        self.profile_root = tempfile.mkdtemp()
+        self.settings_override = override_settings(
+            PROCTOR_EVIDENCE_ROOT=self.evidence_root, PROCTOR_PROFILE_ROOT=self.profile_root
+        )
         self.settings_override.enable()
         now = timezone.now()
         self.examiner = User.objects.create_user(username="examiner", password="password", role=User.Role.EXAMINER)
@@ -45,6 +48,7 @@ class ProctoringViewsTests(TestCase):
     def tearDown(self):
         self.settings_override.disable()
         shutil.rmtree(self.evidence_root, ignore_errors=True)
+        shutil.rmtree(self.profile_root, ignore_errors=True)
 
     def _agent_post(self, name, payload, token=None):
         return self.client.post(
@@ -126,3 +130,20 @@ class ProctoringViewsTests(TestCase):
         self.assertEqual(decision.decided_by, self.examiner)
         self.assertEqual(decision.decision, ReviewDecision.Decision.DISMISS)
         self.assertTrue(decision.decided_at)
+
+    def test_identity_mismatch_is_advisory_and_reference_image_is_token_gated(self):
+        self.candidate.profile_photo.save(
+            "reference.jpg", SimpleUploadedFile("reference.jpg", b"jpeg-data", content_type="image/jpeg"), save=True
+        )
+        photo_url = reverse("proctoring:agent-profile-photo")
+        self.assertEqual(self.client.get(photo_url).status_code, 403)
+        response = self.client.get(photo_url, HTTP_AUTHORIZATION=f"Bearer {self.token}")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response["Cache-Control"], "no-store")
+        mismatch = self._agent_post(
+            "proctoring:agent-event",
+            {"event_type": "ID_MISMATCH", "severity": "LOW", "details": {"confidence": 0.21, "source": "local-reference"}},
+        )
+        self.assertEqual(mismatch.status_code, 201)
+        self.attempt.refresh_from_db()
+        self.assertEqual(self.attempt.status, Attempt.Status.IN_PROGRESS)

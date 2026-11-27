@@ -62,6 +62,9 @@ from .services import (
 )
 
 
+from .bulk_import import commit_candidates, commit_questions, preview_candidates, preview_questions
+from .reporting import build_pdf_response, candidate_report_data, issue_report, summary_report_data, verification_data
+
 def _owned_exam_or_404(request, exam_id):
     if request.user.is_superuser:
         return get_object_or_404(Examination, pk=exam_id)
@@ -536,11 +539,14 @@ def candidate_start_attempt(request, exam_id):
 
 
 def _candidate_attempt_or_404(request, attempt_id):
-    if not request.user.is_candidate:
-        raise PermissionDenied("Only candidates can access an attempt.")
     attempt = get_object_or_404(
-        Attempt.objects.select_related("examination"), pk=attempt_id, candidate=request.user
+        Attempt.all_objects.select_related("examination"), pk=attempt_id, candidate=request.user
     )
+    if attempt.is_sandbox:
+        if not request.user.is_examiner or (not request.user.is_superuser and attempt.examination.examiner_id != request.user.id):
+            raise PermissionDenied("Only the owning examiner can access this sandbox preview.")
+    elif not request.user.is_candidate:
+        raise PermissionDenied("Only candidates can access an attempt.")
     return expire_attempt_if_needed(attempt)
 
 
@@ -594,6 +600,8 @@ def attempt_workspace(request, attempt_id, position):
             "has_previous": position > 1,
             "has_next": position < total,
             "remaining_seconds": _remaining_seconds(attempt),
+            "workspace_preference": UserPreference.objects.filter(user=request.user).first(),
+            "scratchpad": attempt.scratchpad,
             "announcements": announcements_after(attempt.examination),
         },
     )
@@ -688,6 +696,8 @@ def attempt_review(request, attempt_id):
             "counts": counts,
             "total": len(palette),
             "remaining_seconds": _remaining_seconds(attempt),
+            "workspace_preference": UserPreference.objects.filter(user=request.user).first(),
+            "scratchpad": attempt.scratchpad,
         },
     )
 
@@ -699,3 +709,125 @@ def submit_attempt(request, attempt_id):
     finalize_attempt(attempt)
     attempt.refresh_from_db()
     return render(request, "examinations/attempt_finished.html", {"attempt": attempt})
+
+@role_required(User.Role.EXAMINER)
+@require_POST
+def sandbox_start(request, exam_id):
+    exam = _owned_exam_or_404(request, exam_id)
+    try:
+        attempt = start_sandbox_attempt(examination=exam, examiner=request.user)
+    except ValidationError as error:
+        messages.error(request, error.messages[0])
+        return redirect("examinations:exam-detail", exam_id=exam.id)
+    messages.info(request, "Sandbox preview started. It is excluded from candidates, results, monitoring, analytics and reports.")
+    return redirect("examinations:attempt-workspace", attempt_id=attempt.id, position=1)
+
+
+@login_required
+@require_POST
+def workspace_preferences(request, attempt_id):
+    attempt = _candidate_attempt_or_404(request, attempt_id)
+    preference, _ = UserPreference.objects.get_or_create(user=request.user)
+    form = WorkspacePreferenceForm(request.POST, instance=preference)
+    if not form.is_valid():
+        return JsonResponse({"ok": False, "errors": form.errors}, status=400)
+    form.save()
+    return JsonResponse({"ok": True})
+
+
+@login_required
+@require_POST
+def save_scratchpad_view(request, attempt_id):
+    attempt = _candidate_attempt_or_404(request, attempt_id)
+    try:
+        save_scratchpad(attempt=attempt, owner=request.user, text=request.POST.get("scratchpad", ""))
+    except PermissionDenied as error:
+        return JsonResponse({"ok": False, "error": str(error)}, status=403)
+    return JsonResponse({"ok": True, "saved_at": timezone.localtime().strftime("%H:%M:%S")})
+
+
+@role_required(User.Role.EXAMINER)
+def bulk_import(request):
+    preview = request.session.get("bulk_import_preview")
+    form = BulkImportForm(request.POST or None, request.FILES or None, examiner=request.user)
+    if request.method == "POST" and request.POST.get("action") == "commit":
+        if not preview or preview.get("examiner_id") != request.user.id:
+            messages.error(request, "The import preview expired. Upload the file again.")
+        elif preview.get("errors"):
+            messages.error(request, "Fix every row error before committing the import.")
+        else:
+            try:
+                if preview["kind"] == "questions":
+                    commit_questions(examiner=request.user, records=preview["records"])
+                else:
+                    exam = _owned_exam_or_404(request, preview["examination_id"])
+                    commit_candidates(examination=exam, records=preview["records"])
+            except ValidationError as error:
+                messages.error(request, error.messages[0])
+            else:
+                request.session.pop("bulk_import_preview", None)
+                messages.success(request, f"Imported {len(preview['records'])} {preview['kind']} atomically.")
+                return redirect("examinations:bulk-import")
+    elif request.method == "POST" and form.is_valid():
+        kind = form.cleaned_data["kind"]
+        records, errors = (preview_questions(form.cleaned_data["file"]) if kind == "questions" else preview_candidates(form.cleaned_data["file"]))
+        preview = {
+            "examiner_id": request.user.id, "kind": kind, "records": records, "errors": errors,
+            "examination_id": form.cleaned_data["examination"].id if form.cleaned_data.get("examination") else None,
+        }
+        request.session["bulk_import_preview"] = preview
+    return render(request, "examinations/bulk_import.html", {"form": form, "preview": preview})
+
+
+@role_required(User.Role.EXAMINER)
+@require_GET
+def import_template(request, kind):
+    if kind == "questions":
+        body = "category,difficulty,question_type,prompt,default_marks,choices\\nMathematics,EASY,SINGLE,2 + 2 = ?,1.00,4|true;3|false\\n"
+    elif kind == "candidates":
+        body = "username,first_name,last_name,email\\ncandidate_001,Amina,Khan,amina@example.test\\n"
+    else:
+        raise Http404
+    response = HttpResponse(body, content_type="text/csv; charset=utf-8")
+    response["Content-Disposition"] = f'attachment; filename="{kind}_import_template.csv"'
+    return response
+
+
+@login_required
+def candidate_result_report(request, attempt_id):
+    if not request.user.is_candidate:
+        raise PermissionDenied("Only candidates can download result reports.")
+    attempt = get_object_or_404(Attempt.objects.select_related("examination", "candidate"), pk=attempt_id, candidate=request.user)
+    report, data = issue_report(report_type=VerifiedReport.Type.CANDIDATE_RESULT, examination=attempt.examination, attempt=attempt)
+    return build_pdf_response(request, report, data, f"result-{attempt.id}.pdf")
+
+
+@role_required(User.Role.EXAMINER)
+def examiner_summary_report(request, exam_id):
+    exam = _owned_exam_or_404(request, exam_id)
+    report, data = issue_report(report_type=VerifiedReport.Type.EXAMINATION_SUMMARY, examination=exam)
+    return build_pdf_response(request, report, data, f"exam-summary-{exam.id}.pdf")
+
+
+def _verify_rate_limited(request):
+    from django.core.cache import cache
+    key = f"verify-rate:{request.META.get('REMOTE_ADDR', 'unknown')}"
+    if cache.add(key, 1, 60):
+        return False
+    try:
+        count = cache.incr(key)
+    except ValueError:
+        count = 1
+    return count > 30
+
+
+def verify_report(request, public_id=None):
+    if _verify_rate_limited(request):
+        return render(request, "examinations/verify_report.html", {"rate_limited": True}, status=429)
+    if request.method == "POST":
+        submitted_id = request.POST.get("public_id", "").strip()
+        if submitted_id:
+            return redirect("examinations:verify-report", public_id=submitted_id)
+    report = get_object_or_404(VerifiedReport.objects.select_related("attempt__candidate", "examination"), public_id=public_id) if public_id else None
+    status, data = verification_data(report) if report else (None, None)
+    return render(request, "examinations/verify_report.html", {"report": report, "verification_status": status, "data": data})
