@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}Verify report | Exam Platform{% endblock %}
+{% block content %}
+<div class="card center-card"><h1>Verify examination report</h1><p class="muted">Enter the verification ID printed on an issued report. This page shows only the minimum result information.</p>
+<form method="post">{% csrf_token %}<label for="public_id">Verification ID</label><input id="public_id" name="public_id" required autocomplete="off"><p><button class="btn btn-primary" type="submit">Verify report</button></p></form>
+{% if rate_limited %}<p class="notice" role="alert">Too many verification requests. Wait one minute and try again.</p>{% elif report %}
+  {% if verification_status == 'authentic' %}<div class="notice-ok" role="status"><strong>Authentic report</strong><p>{{ data.exam_title }}</p><p>Issued {{ data.issue_date }}</p>{% if data.candidate_name %}<p>Candidate: {{ data.candidate_name }}</p><p>Score: {{ data.score }} / {{ data.total }}</p>{% endif %}</div>
+  {% elif verification_status == 'superseded' %}<p class="notice" role="status">This report has been superseded by a later issued report.</p>
+  {% elif verification_status == 'revoked' %}<p class="notice" role="status">This report was revoked.</p>
+  {% else %}<p class="notice" role="status">This report cannot be verified.</p>{% endif %}
+{% elif public_id %}<p class="notice" role="status">No report matches that verification ID.</p>{% endif %}
+</div>
+{% endblock %}

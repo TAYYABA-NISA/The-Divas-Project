@@ -539,16 +539,21 @@ def candidate_start_attempt(request, exam_id):
 
 
 def _candidate_attempt_or_404(request, attempt_id):
-    attempt = get_object_or_404(
-        Attempt.all_objects.select_related("examination"), pk=attempt_id, candidate=request.user
-    )
-    if attempt.is_sandbox:
+    if request.user.is_candidate:
+        attempt = get_object_or_404(
+            Attempt.all_objects.select_related("examination"), pk=attempt_id, candidate=request.user
+        )
+    else:
+        # Examiners may only open sandbox attempts they own. All other
+        # candidate-route requests are rejected before disclosing attempt data.
+        attempt = Attempt.all_objects.select_related("examination").filter(
+            pk=attempt_id, candidate=request.user, is_sandbox=True
+        ).first()
+        if attempt is None:
+            raise PermissionDenied("Only candidates can access an attempt.")
         if not request.user.is_examiner or (not request.user.is_superuser and attempt.examination.examiner_id != request.user.id):
             raise PermissionDenied("Only the owning examiner can access this sandbox preview.")
-    elif not request.user.is_candidate:
-        raise PermissionDenied("Only candidates can access an attempt.")
     return expire_attempt_if_needed(attempt)
-
 
 def _question_status(question):
     """Return 'review', 'answered' or 'unanswered' for the question palette."""
@@ -600,7 +605,7 @@ def attempt_workspace(request, attempt_id, position):
             "has_previous": position > 1,
             "has_next": position < total,
             "remaining_seconds": _remaining_seconds(attempt),
-            "workspace_preference": UserPreference.objects.filter(user=request.user).first(),
+            "workspace_preference": UserPreference.objects.get_or_create(user=request.user)[0],
             "scratchpad": attempt.scratchpad,
             "announcements": announcements_after(attempt.examination),
         },
@@ -696,7 +701,7 @@ def attempt_review(request, attempt_id):
             "counts": counts,
             "total": len(palette),
             "remaining_seconds": _remaining_seconds(attempt),
-            "workspace_preference": UserPreference.objects.filter(user=request.user).first(),
+            "workspace_preference": UserPreference.objects.get_or_create(user=request.user)[0],
             "scratchpad": attempt.scratchpad,
         },
     )

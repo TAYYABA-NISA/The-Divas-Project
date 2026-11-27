@@ -7,6 +7,7 @@
   <p class="muted">Your score</p>
   <p class="big-score">{{ attempt.total_score|floatformat:"-2" }} / {{ attempt.total_marks|default:attempt.examination.total_marks|floatformat:"-2" }}</p>
 </div>
+<div class="actions"><a class="btn btn-primary" href="{% url 'examinations:candidate-result-report' attempt.id %}">Download verified PDF report</a></div>
 <h2>Marks by question</h2>
 <table>
   <thead><tr><th>#</th><th>Question</th><th>Your marks</th><th>Examiner feedback</th></tr></thead>

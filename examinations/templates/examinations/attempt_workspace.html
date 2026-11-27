@@ -19,7 +19,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="exam-layout">
+<div class="exam-layout workspace-{{ workspace_preference.palette_position|default:'RIGHT'|lower }} density-{{ workspace_preference.density|default:'COMFORTABLE'|lower }} font-{{ workspace_preference.font_size|default:'NORMAL'|lower }} theme-{{ workspace_preference.theme|default:'STANDARD'|lower }}">
   <section>
     <form id="answer-form" method="post" action="{% url 'examinations:attempt-save-answer' attempt.id question.position %}">
       {% csrf_token %}
@@ -95,6 +95,22 @@
       </div>
       <button class="btn btn-success sidebar-submit" type="submit" form="answer-form" name="go" value="review">Review &amp; submit</button>
     </div>
+    <section class="card scratchpad" aria-labelledby="scratchpad-title">
+      <h2 id="scratchpad-title">Digital scratchpad</h2>
+      <p class="muted">Private rough work. It is never submitted or graded.</p>
+      <label class="sr-only" for="scratchpad">Scratchpad text</label>
+      <textarea id="scratchpad" rows="8" maxlength="10000" placeholder="Write rough work here…">{{ scratchpad }}</textarea>
+      <p class="save-status" id="scratchpad-status" role="status" aria-live="polite">{% if scratchpad %}Saved{% endif %}</p>
+    </section>
+    <details class="card preferences"><summary>Workspace preferences</summary>
+      <form id="preferences-form" action="{% url 'examinations:workspace-preferences' attempt.id %}" method="post">{% csrf_token %}
+        <p><label for="font_size">Font size</label><select id="font_size" name="font_size">{% for value, label in workspace_preference.FontSize.choices %}<option value="{{ value }}" {% if workspace_preference.font_size == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></p>
+        <p><label for="theme">Contrast</label><select id="theme" name="theme">{% for value, label in workspace_preference.Theme.choices %}<option value="{{ value }}" {% if workspace_preference.theme == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></p>
+        <p><label for="palette_position">Question palette</label><select id="palette_position" name="palette_position">{% for value, label in workspace_preference.PalettePosition.choices %}<option value="{{ value }}" {% if workspace_preference.palette_position == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></p>
+        <p><label for="density">Spacing</label><select id="density" name="density">{% for value, label in workspace_preference.Density.choices %}<option value="{{ value }}" {% if workspace_preference.density == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></p>
+        <button class="btn btn-small" type="submit">Save preferences</button><span id="preferences-status" class="save-status" role="status" aria-live="polite"></span>
+      </form>
+    </details>
   </aside>
 </div>
 
@@ -259,6 +275,27 @@
     }
     setTimeout(tick, 1000);
   }
+  const scratchpad = document.getElementById('scratchpad');
+  const scratchpadStatus = document.getElementById('scratchpad-status');
+  let scratchpadTimer = null;
+  function saveScratchpad() {
+    const body = new URLSearchParams({scratchpad: scratchpad.value, csrfmiddlewaretoken: '{{ csrf_token }}'});
+    scratchpadStatus.textContent = 'Saving…';
+    fetch("{% url 'examinations:scratchpad-save' attempt.id %}", {method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'XMLHttpRequest'}, body: body})
+      .then(function (response) { return response.json().then(function (data) { return {response: response, data: data}; }); })
+      .then(function (result) { scratchpadStatus.textContent = result.response.ok ? 'Saved at ' + result.data.saved_at : (result.data.error || 'Scratchpad could not be saved.'); })
+      .catch(function () { scratchpadStatus.textContent = 'Scratchpad could not be saved. Check your connection.'; });
+  }
+  scratchpad.addEventListener('input', function () { scratchpadStatus.textContent = 'Unsaved changes'; clearTimeout(scratchpadTimer); scratchpadTimer = setTimeout(saveScratchpad, 800); });
+  const prefs = document.getElementById('preferences-form');
+  prefs.addEventListener('submit', function (event) {
+    event.preventDefault();
+    const statusEl = document.getElementById('preferences-status'); statusEl.textContent = 'Saving…';
+    fetch(prefs.action, {method: 'POST', headers: {'X-Requested-With': 'XMLHttpRequest'}, body: new FormData(prefs)})
+      .then(function (response) { return response.json().then(function (data) { return {response: response, data: data}; }); })
+      .then(function (result) { if (!result.response.ok) throw new Error('Could not save preferences.'); statusEl.textContent = 'Saved. Refreshing layout…'; window.location.reload(); })
+      .catch(function () { statusEl.textContent = 'Preferences could not be saved.'; });
+  });
   tick();
   net.start();
 })();

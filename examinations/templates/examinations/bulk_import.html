@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block title %}Bulk import | Exam Platform{% endblock %}
+{% block content %}
+<h1>Bulk import</h1>
+<p class="muted">Upload UTF-8 CSV or JSON. Every row is validated before a single record is written.</p>
+<div class="actions"><a class="btn" href="{% url 'examinations:import-template' 'questions' %}">Question CSV template</a><a class="btn" href="{% url 'examinations:import-template' 'candidates' %}">Candidate CSV template</a></div>
+<form method="post" enctype="multipart/form-data" class="card">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary" type="submit">Validate and preview</button></form>
+{% if preview %}
+<section class="card"><h2>Preview: {{ preview.kind }}</h2><p>{{ preview.records|length }} valid record{{ preview.records|pluralize }} ready to import.</p>
+{% if preview.errors %}<h3>Row errors</h3><ul class="errorlist">{% for error in preview.errors %}<li>Row {{ error.row }}: {{ error.message }}</li>{% endfor %}</ul><p class="notice">Nothing can be imported until every row error is corrected.</p>{% else %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="commit"><button class="btn btn-primary" type="submit">Import {{ preview.records|length }} record{{ preview.records|pluralize }}</button></form>{% endif %}
+</section>{% endif %}
+{% endblock %}

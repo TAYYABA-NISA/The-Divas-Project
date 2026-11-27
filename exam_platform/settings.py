@@ -85,6 +85,10 @@ PROCTOR_EVIDENCE_ROOT = Path(os.environ.get("PROCTOR_EVIDENCE_ROOT", BASE_DIR / 
 PROCTOR_PROFILE_ROOT = Path(os.environ.get("PROCTOR_PROFILE_ROOT", BASE_DIR / "private_profile_photos"))
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# Proctoring evidence is private and must never be served by static/media routes.
+PROCTOR_EVIDENCE_ROOT = os.environ.get("PROCTOR_EVIDENCE_ROOT", str(BASE_DIR / "private_proctor_evidence"))
+PROCTOR_EVIDENCE_RETENTION_DAYS = int(os.environ.get("PROCTOR_EVIDENCE_RETENTION_DAYS", "30"))
+
 if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True

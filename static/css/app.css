@@ -181,3 +181,17 @@ input[type=text], input[type=password], input[type=number], input[type=email], i
 .choice-review li { padding: .35rem 0; }
 .notice-ok { background: var(--success-bg); color: #155f37; border-radius: 8px; padding: .8rem 1rem; }
 .big-score { font-size: 2.4rem; font-weight: 700; margin: 0; }
+
+/* ---------- Candidate workspace preferences and scratchpad (4.7, 4.8) ---------- */
+.workspace-top { grid-template-columns: 1fr; }
+.workspace-top .exam-sidebar { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(240px, 1fr); gap: 1rem; }
+.workspace-top .exam-sidebar .card { position: static; }
+.workspace-top .preferences { grid-column: 1 / -1; }
+.font-small { font-size: .9rem; }
+.font-large { font-size: 1.14rem; }
+.density-compact .question-card, .density-compact .exam-sidebar .card { padding: .85rem; }
+.theme-high_contrast { --bg: #fff; --surface: #fff; --border: #111; --text: #000; --muted: #222; --primary: #0037b3; --primary-dark: #001a66; }
+.scratchpad textarea { width: 100%; max-width: none; min-height: 9rem; }
+.preferences summary { cursor: pointer; font-weight: 700; }
+.preferences[open] summary { margin-bottom: .8rem; }
+@media (max-width: 860px) { .workspace-top .exam-sidebar { grid-template-columns: 1fr; } }
