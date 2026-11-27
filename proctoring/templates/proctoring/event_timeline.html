@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}Monitoring review | {{ attempt.examination.title }}{% endblock %}
+{% block content %}
+<section aria-labelledby="timeline-title">
+  <p class="eyebrow">Examiner · {{ attempt.examination.title }} · {{ attempt.candidate.get_full_name|default:attempt.candidate.username }}</p>
+  <h1 id="timeline-title">Monitoring review</h1>
+  <p class="notice">These indicators are advisory only. They are not conclusive evidence of misconduct and do not change scores.</p>
+  {% if events %}
+    <ol class="timeline">
+    {% for event in events %}
+      <li class="card">
+        <div class="split">
+          <div><strong>{{ event.get_event_type_display }}</strong><p class="muted">{{ event.occurred_at|date:"M j, Y, P" }} · {{ event.get_severity_display }} severity</p></div>
+          <div>
+            {% for clip in event.clips.all %}<a class="btn btn-small" href="{% url 'proctoring:private-clip' clip.id %}">View private evidence</a>{% endfor %}
+          </div>
+        </div>
+        {% if event.details %}<details><summary>Technical details</summary><pre>{{ event.details }}</pre></details>{% endif %}
+        {% if event.review_decision %}
+          <p><strong>{{ event.review_decision.get_decision_display }}</strong> by {{ event.review_decision.decided_by.get_full_name|default:event.review_decision.decided_by.username }} on {{ event.review_decision.decided_at|date:"M j, Y, P" }}.</p>
+          <p>{{ event.review_decision.note }}</p>
+        {% else %}
+          <form method="post" action="{% url 'proctoring:decide-event' event.id %}" class="stack">
+            {% csrf_token %}
+            <label for="decision-{{ event.id }}">Decision</label>
+            <select id="decision-{{ event.id }}" name="decision"><option value="ACCEPT">Accept for review</option><option value="DISMISS">Dismiss</option></select>
+            <label for="note-{{ event.id }}">Required review note</label>
+            <textarea id="note-{{ event.id }}" name="note" rows="3" required></textarea>
+            <button class="btn" type="submit">Save review decision</button>
+          </form>
+        {% endif %}
+      </li>
+    {% endfor %}
+    </ol>
+  {% else %}
+    <div class="empty-state"><h2>No monitoring events</h2><p>No advisory indicators have been received for this attempt.</p></div>
+  {% endif %}
+</section>
+{% endblock %}

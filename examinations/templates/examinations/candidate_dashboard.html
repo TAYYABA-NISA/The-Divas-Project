@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block title %}My examinations | Exam Platform{% endblock %}
+{% block content %}
+<h1>My examinations</h1>
+<p class="muted">Examinations you are enrolled in. You can enter an examination only during its scheduled window.</p>
+
+{% if in_progress %}
+<h2>In progress</h2>
+{% for item in in_progress %}
+<div class="card card-row">
+  <div>
+    <h3>{{ item.exam.title }}</h3>
+    <div class="meta"><span>Time left until {{ item.attempt.expires_at|time:"H:i" }}</span><span>{{ item.exam.total_marks }} marks</span></div>
+  </div>
+  <a class="btn btn-primary" href="{% url 'examinations:attempt-workspace' item.attempt.id 1 %}">Resume examination</a>
+</div>
+{% endfor %}
+{% endif %}
+
+<h2>Available now</h2>
+{% for item in available %}
+<div class="card">
+  <div class="card-row">
+    <div>
+      <h3>{{ item.exam.title }}</h3>
+      <div class="meta"><span>{{ item.exam.duration_minutes }} minutes</span><span>{{ item.exam.total_marks }} marks</span><span>Closes {{ item.exam.ends_at|date:"d M Y, H:i" }}</span></div>
+    </div>
+    <form method="post" action="{% url 'examinations:candidate-start' item.exam.id %}" onsubmit="return confirm('Start the examination now? The timer begins immediately and you get one attempt.');">
+      {% csrf_token %}<button class="btn btn-primary" type="submit">Start examination</button>
+    </form>
+  </div>
+  <details><summary>Instructions</summary>{{ item.exam.instructions|linebreaks }}</details>
+</div>
+{% empty %}<p class="empty">No examinations are open right now.</p>{% endfor %}
+
+<h2>Upcoming</h2>
+{% for item in upcoming %}
+<div class="card card-row">
+  <div><h3>{{ item.exam.title }}</h3><div class="meta"><span>Opens {{ item.exam.starts_at|date:"d M Y, H:i" }}</span><span>{{ item.exam.duration_minutes }} minutes</span></div></div>
+  <span class="pill pill-blue">Not open yet</span>
+</div>
+{% empty %}<p class="empty">No upcoming examinations.</p>{% endfor %}
+
+<h2>Completed</h2>
+{% for item in completed %}
+<div class="card card-row">
+  <div><h3>{{ item.exam.title }}</h3><div class="meta"><span>Submitted {{ item.attempt.submitted_at|date:"d M Y, H:i" }}</span></div></div>
+  <div>
+    {% if item.attempt.status == 'EXPIRED' %}<span class="pill pill-grey">Timed out</span>{% endif %}
+    {% if item.exam.results_published %}<a class="btn btn-primary btn-small" href="{% url 'examinations:candidate-result' item.attempt.id %}">View my result</a>
+    {% elif item.attempt.status != 'EXPIRED' %}<span class="pill pill-green">Awaiting results</span>{% endif %}
+  </div>
+</div>
+{% empty %}<p class="empty">You have not completed any examinations yet.</p>{% endfor %}
+
+{% if missed %}
+<h2>Closed</h2>
+{% for item in missed %}
+<div class="card card-row"><div><h3>{{ item.exam.title }}</h3><div class="meta"><span>Closed {{ item.exam.ends_at|date:"d M Y, H:i" }}</span></div></div><span class="pill pill-grey">Not attempted</span></div>
+{% endfor %}
+{% endif %}
+{% endblock %}

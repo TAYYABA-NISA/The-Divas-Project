@@ -1,0 +1,2 @@
+# Simulated mode uses Python's standard library only.
+# Install requirements-hardware.txt only when implementing optional live detectors.

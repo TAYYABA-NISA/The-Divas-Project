@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block title %}Review flag | {{ event.session.attempt.examination.title }}{% endblock %}
+{% block content %}
+<section class="card" aria-labelledby="decision-title">
+  <h1 id="decision-title">Review advisory flag</h1>
+  <p class="notice">Flags are advisory only and never change a candidate score automatically.</p>
+  <p><strong>{{ event.get_event_type_display }}</strong> · {{ event.occurred_at|date:"M j, Y, P" }}</p>
+  <form method="post" class="stack">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {% for field in form %}<div class="field">{{ field.label_tag }}{{ field }}{{ field.errors }}</div>{% endfor %}
+    <button class="btn" type="submit">Save review decision</button>
+  </form>
+</section>
+{% endblock %}

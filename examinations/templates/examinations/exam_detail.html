@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}{{ exam.title }} | Exam Platform{% endblock %}
+{% block content %}
+<h1>{{ exam.title }}</h1>
+<p><span class="pill pill-blue">{{ exam.get_state_display }}</span> · {{ exam.total_marks }} marks · {{ exam.duration_minutes }} minutes · Multiple-select: {{ exam.get_multiple_select_scheme_display }}</p>
+<div>{{ exam.instructions|linebreaks }}</div>
+
+<div class="actions">
+  {% if exam.state == 'DRAFT' %}
+    <a class="btn" href="{% url 'examinations:exam-questions' exam.id %}">Assign questions</a>
+    <a class="btn" href="{% url 'examinations:exam-blueprint' exam.id %}">{% if blueprint %}Edit{% else %}Set{% endif %} difficulty blueprint</a>
+    <a class="btn" href="{% url 'examinations:exam-enroll' exam.id %}">Enroll candidate</a>
+    <form method="post" action="{% url 'examinations:exam-publish' exam.id %}" onsubmit="return confirm('Publish this examination? Questions and candidates are locked afterwards.');">{% csrf_token %}<button class="btn btn-primary" type="submit">Publish examination</button></form>
+  {% else %}
+    <a class="btn btn-primary" href="{% url 'examinations:exam-monitor' exam.id %}">Monitor and announce</a>
+    <a class="btn" href="{% url 'examinations:exam-grading' exam.id %}">Grading and results</a>
+    <a class="btn" href="{% url 'examinations:exam-analytics' exam.id %}">Analytics</a>
+  {% endif %}
+</div>
+
+{% if blueprint %}
+<h2>Difficulty blueprint</h2>
+<div class="card">
+  <p>Each candidate receives their own random draw of
+    <strong>{{ blueprint.easy_count }} easy</strong> ({{ blueprint.easy_marks|floatformat:"-2" }} marks each),
+    <strong>{{ blueprint.medium_count }} medium</strong> ({{ blueprint.medium_marks|floatformat:"-2" }}),
+    <strong>{{ blueprint.hard_count }} hard</strong> ({{ blueprint.hard_marks|floatformat:"-2" }})
+    {% if blueprint.category %}from category “{{ blueprint.category }}”{% else %}from all categories{% endif %}.
+    Every candidate gets the same number of questions and the same total marks.</p>
+  {% if pool_counts %}<p class="muted">Eligible questions now: {{ pool_counts.EASY }} easy, {{ pool_counts.MEDIUM }} medium, {{ pool_counts.HARD }} hard.</p>{% endif %}
+</div>
+{% endif %}
+
+<h2>Assigned questions</h2>
+{% if assignments %}<ol>{% for assignment in assignments %}<li>{{ assignment.question.prompt }} <span class="muted">({{ assignment.assigned_marks }} marks)</span></li>{% endfor %}</ol>{% else %}<p class="empty">No fixed questions assigned{% if blueprint %}; questions come from the blueprint draw{% endif %}.</p>{% endif %}
+<h2>Enrolled candidates</h2>
+{% if enrollments %}<ul>{% for enrollment in enrollments %}<li>{{ enrollment.candidate.get_full_name|default:enrollment.candidate.username }}</li>{% endfor %}</ul>{% else %}<p class="empty">No candidates enrolled.</p>{% endif %}
+{% endblock %}

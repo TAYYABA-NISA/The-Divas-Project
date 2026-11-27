@@ -1,0 +1,4 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>Create question</h1><p>Use choices for MCQ and multiple-select questions. Leave all choice rows empty for a written response.</p><form method="post">{% csrf_token %}{{ question_form.as_p }}{{ formset.management_form }}<h2>Answer choices</h2>{% for form in formset %}<div class="card">{{ form.as_p }}</div>{% endfor %}<button type="submit">Save question</button></form>
+{% endblock %}

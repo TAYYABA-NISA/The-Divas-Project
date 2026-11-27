@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Review answers | {{ attempt.examination.title }}{% endblock %}
+
+{% block header %}
+<header class="exam-header">
+  <div class="exam-header-inner">
+    <h1>{{ attempt.examination.title }}</h1>
+    <span class="muted">Review before submitting</span>
+    <div class="timer" id="timer" role="timer" title="Time remaining">--:--</div>
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<h1>Review your answers</h1>
+<p class="muted">Check your progress. Select a question to change its answer. You can still edit answers until you submit or time runs out.</p>
+
+<div class="summary-grid">
+  <div class="summary-answered"><strong>{{ counts.answered }}</strong>Answered</div>
+  <div class="summary-review"><strong>{{ counts.review }}</strong>Marked for review</div>
+  <div class="summary-unanswered"><strong>{{ counts.unanswered }}</strong>Not answered</div>
+</div>
+
+<table>
+  <thead><tr><th>#</th><th>Question</th><th>Marks</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {% for item in palette %}
+    <tr>
+      <td>{{ item.question.position }}</td>
+      <td>{{ item.question.prompt|truncatewords:14 }}</td>
+      <td>{{ item.question.marks|floatformat:"-2" }}</td>
+      <td>
+        {% if item.status == 'answered' %}<span class="pill pill-green">Answered</span>
+        {% elif item.status == 'review' %}<span class="pill pill-amber">Marked for review</span>
+        {% else %}<span class="pill pill-grey">Not answered</span>{% endif %}
+      </td>
+      <td><a class="btn btn-small" href="{% url 'examinations:attempt-workspace' attempt.id item.question.position %}">{% if item.status == 'unanswered' %}Answer{% else %}Edit{% endif %}</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+{% if counts.unanswered or counts.review %}
+  <p class="notice" style="margin-top:1.25rem">
+    {% if counts.unanswered %}{{ counts.unanswered }} question{{ counts.unanswered|pluralize }} not answered. {% endif %}
+    {% if counts.review %}{{ counts.review }} question{{ counts.review|pluralize }} marked for review.{% endif %}
+  </p>
+{% endif %}
+
+<form id="submit-form" method="post" action="{% url 'examinations:attempt-submit' attempt.id %}" class="actions">
+  {% csrf_token %}
+  <a class="btn" href="{% url 'examinations:attempt-workspace' attempt.id 1 %}">← Back to questions</a>
+  <button class="btn btn-success" type="submit">Submit examination</button>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/exam-net.js' %}"></script>
+<script>
+(function () {
+  const form = document.getElementById('submit-form');
+  const timer = document.getElementById('timer');
+  const deadline = Date.now() + {{ remaining_seconds }} * 1000;
+  let submitting = false;
+  const net = ExamNet({ attemptId: {{ attempt.id }}, saveUrl: "{% url 'examinations:attempt-save-answer' attempt.id 0 %}", pollUrl: "{% url 'examinations:attempt-poll' attempt.id %}", csrf: "{{ csrf_token }}", interval: 30000, onHeartbeat: function () {} });
+  net.start();
+
+  form.addEventListener('submit', function (e) {
+    if (submitting) return;
+    if (!confirm('Submit your examination? You cannot change your answers afterwards.')) { e.preventDefault(); return; }
+    // Send any answers still queued on this device before finalising.
+    if (net.pending()) {
+      e.preventDefault();
+      net.flush().then(function (done) {
+        if (done || !net.pending()) { submitting = true; form.submit(); }
+        else { alert('You appear to be offline and some answers have not synced yet. Reconnect, then submit again. If time runs out the server finalises your attempt with the answers it already holds.'); }
+      });
+      return;
+    }
+    submitting = true;
+  });
+
+  function tick() {
+    const left = Math.max(0, Math.round((deadline - Date.now()) / 1000));
+    const h = Math.floor(left / 3600), m = Math.floor((left % 3600) / 60), s = left % 60;
+    timer.textContent = (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+    timer.classList.toggle('warning', left <= 300 && left > 60);
+    timer.classList.toggle('critical', left <= 60);
+    if (left <= 0) { if (!submitting) { submitting = true; form.submit(); } return; }
+    setTimeout(tick, 1000);
+  }
+  tick();
+})();
+</script>
+{% endblock %}

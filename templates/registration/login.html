@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block title %}Sign in | Exam Platform{% endblock %}
+{% block body %}
+<main class="auth-wrap">
+  <div class="auth-card">
+    <h1>Sign in</h1>
+    <p class="subtitle">Choose your role, then enter your account details.</p>
+
+    {% if form.non_field_errors %}<div class="form-error" role="alert">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+
+    <form method="post" novalidate>
+      {% csrf_token %}
+      <fieldset class="role-tabs">
+        <legend class="sr-only">Sign in as</legend>
+        {% for radio in form.role %}
+          <label class="role-tab">
+            {{ radio.tag }}
+            <span>
+              {{ radio.choice_label }}
+              <small>{% if radio.data.value == 'CANDIDATE' %}Take exams{% elif radio.data.value == 'EXAMINER' %}Create &amp; grade{% else %}Manage users{% endif %}</small>
+            </span>
+          </label>
+        {% endfor %}
+      </fieldset>
+
+      <div class="field">
+        <label for="{{ form.username.id_for_label }}">Username</label>
+        {{ form.username }}
+        {{ form.username.errors }}
+      </div>
+      <div class="field">
+        <label for="{{ form.password.id_for_label }}">Password</label>
+        {{ form.password }}
+        {{ form.password.errors }}
+      </div>
+      <input type="hidden" name="next" value="{{ next }}">
+      <button class="btn btn-primary" type="submit">Sign in</button>
+    </form>
+  </div>
+</main>
+{% endblock %}

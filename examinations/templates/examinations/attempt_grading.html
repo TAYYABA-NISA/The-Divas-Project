@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}{{ attempt.candidate.get_full_name|default:attempt.candidate.username }} | Grading{% endblock %}
+{% block content %}
+<p><a href="{% url 'examinations:exam-grading' exam.id %}">← Grading and results</a></p>
+<h1>{{ attempt.candidate.get_full_name|default:attempt.candidate.username }}</h1>
+<p><strong>Score {{ attempt.total_score|floatformat:"-2" }} / {{ attempt.total_marks|default:exam.total_marks|floatformat:"-2" }}</strong>
+  · {% if attempt.status == 'EXPIRED' %}Time expired{% else %}Submitted{% endif %}</p>
+
+{% for item in items %}
+<div class="card">
+  <p class="muted">Question {{ item.question.position }} · {{ item.question.get_question_type_display }} · {{ item.question.marks|floatformat:"-2" }} marks</p>
+  <div>{{ item.question.prompt|linebreaks }}</div>
+  {% if item.question.question_type == 'WRITTEN' %}
+    <p><strong>Response</strong></p>
+    <div class="response-box">{% if item.answer and item.answer.written_response.strip %}{{ item.answer.written_response|linebreaksbr }}{% else %}<em>No response</em>{% endif %}</div>
+    {% if item.answer %}
+    <form method="post" class="grade-form">
+      {% csrf_token %}
+      <input type="hidden" name="answer_id" value="{{ item.answer.id }}">
+      <label for="marks-{{ item.answer.id }}">Marks (0 to {{ item.question.marks|floatformat:"-2" }})</label>
+      <input id="marks-{{ item.answer.id }}" type="number" name="marks" min="0" max="{{ item.question.marks }}" step="0.01" required value="{% if item.answer.awarded_marks is not None %}{{ item.answer.awarded_marks }}{% endif %}">
+      <label for="fb-{{ item.answer.id }}">Feedback (optional)</label>
+      <textarea id="fb-{{ item.answer.id }}" name="feedback" rows="2" maxlength="1000">{{ item.answer.grader_feedback }}</textarea>
+      <button class="btn btn-primary btn-small" type="submit">Save marks</button>
+      {% if item.needs_marks %}<span class="pill pill-amber">Needs marks</span>{% elif item.answer.graded_at %}<span class="pill pill-green">Graded</span>{% endif %}
+    </form>
+    {% endif %}
+  {% else %}
+    <ul class="choice-review">
+      {% for c in item.choices %}
+        <li>{{ c.text }}
+          {% if c.selected %}<span class="pill pill-blue">Selected</span>{% endif %}
+          {% if c.correct %}<span class="pill pill-green">Correct option</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    <p><strong>Awarded:</strong> {{ item.answer.awarded_marks|default:"0"|floatformat:"-2" }} / {{ item.question.marks|floatformat:"-2" }}</p>
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

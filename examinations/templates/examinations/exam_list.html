@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block content %}
+<h1>My examinations</h1>
+<p><a href="{% url 'examinations:exam-create' %}">Create examination</a></p>
+{% if exams %}<table><thead><tr><th>Title</th><th>State</th><th>Schedule</th><th>Questions</th></tr></thead><tbody>{% for exam in exams %}<tr><td><a href="{% url 'examinations:exam-detail' exam.id %}">{{ exam.title }}</a></td><td>{{ exam.get_state_display }}</td><td>{{ exam.starts_at }} to {{ exam.ends_at }}</td><td>{{ exam.exam_questions.count }}</td></tr>{% endfor %}</tbody></table>{% else %}<p>No examinations yet.</p>{% endif %}
+{% endblock %}

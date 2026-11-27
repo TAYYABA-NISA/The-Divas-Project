@@ -1,0 +1,266 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Question {{ question.position }} of {{ total }} | {{ attempt.examination.title }}{% endblock %}
+
+{% block header %}
+<header class="exam-header">
+  <div class="exam-header-inner">
+    <h1>{{ attempt.examination.title }}</h1>
+    <span class="muted">{{ counts.answered }} of {{ total }} answered</span>
+    <span class="net-status net-online" id="net-status" role="status" aria-live="polite">Online</span>
+    <div class="timer" id="timer" role="timer" aria-live="off" title="Time remaining">--:--</div>
+  </div>
+  <div class="progress" aria-hidden="true"><span style="width: {% widthratio counts.answered total 100 %}%"></span></div>
+  <div class="visually-live sr-only" id="time-alert" aria-live="assertive"></div>
+  <div id="announcements" class="announcements" aria-live="polite">
+    {% for a in announcements %}<div class="announcement" data-id="{{ a.id }}"><strong>Examiner announcement:</strong> {{ a.message }}</div>{% endfor %}
+  </div>
+</header>
+{% endblock %}
+
+{% block content %}
+<div class="exam-layout">
+  <section>
+    <form id="answer-form" method="post" action="{% url 'examinations:attempt-save-answer' attempt.id question.position %}">
+      {% csrf_token %}
+      <input type="hidden" name="client_seq" id="client-seq" value="">
+      {# Pressing Enter saves and stays on this question instead of triggering "Previous". #}
+      <button type="submit" name="go" value="stay" hidden tabindex="-1" aria-hidden="true"></button>
+      <div class="question-card">
+        <div class="question-head">
+          <span class="question-number">Question {{ question.position }} of {{ total }}</span>
+          <span class="question-type">
+            {% if question.question_type == 'SINGLE' %}Choose one answer
+            {% elif question.question_type == 'MULTIPLE' %}Choose all that apply
+            {% else %}Written answer{% endif %}
+            Â· {{ question.marks|floatformat:"-2" }} mark{{ question.marks|pluralize }}
+          </span>
+        </div>
+
+        <div class="question-prompt">{{ question.prompt|linebreaks }}</div>
+
+        {% if question.question_type == 'WRITTEN' %}
+          <div class="written">
+            <label for="written_response" class="sr-only">Your answer</label>
+            <textarea id="written_response" name="written_response" placeholder="Type your answer here">{{ answer.written_response }}</textarea>
+            <div class="char-count"><span id="char-count">{{ answer.written_response|length }}</span> characters</div>
+          </div>
+        {% else %}
+          <div class="choices" role="{% if question.question_type == 'SINGLE' %}radiogroup{% else %}group{% endif %}" aria-label="Answer choices">
+            {% for choice in choices %}
+              <label class="choice{% if choice.id in selected_ids %} selected{% endif %}">
+                <input type="{% if question.question_type == 'SINGLE' %}radio{% else %}checkbox{% endif %}" name="choice" value="{{ choice.id }}" {% if choice.id in selected_ids %}checked{% endif %}>
+                <span>{{ choice.text }}</span>
+              </label>
+            {% endfor %}
+          </div>
+          {% if question.question_type == 'SINGLE' %}
+            <p><button type="button" class="btn btn-small" id="clear-choice">Clear selection</button></p>
+          {% endif %}
+        {% endif %}
+
+        <label class="review-toggle">
+          <input type="checkbox" name="marked_for_review" {% if answer.marked_for_review %}checked{% endif %}>
+          Mark for review
+        </label>
+
+        <div class="question-nav">
+          <button class="btn" type="submit" name="go" value="previous" {% if not has_previous %}disabled{% endif %}>â† Previous</button>
+          <span class="save-status" id="save-status" aria-live="polite">{% if answer %}Saved{% endif %}</span>
+          {% if has_next %}
+            <button class="btn btn-primary" type="submit" name="go" value="next">Save &amp; next â†’</button>
+          {% else %}
+            <button class="btn btn-primary" type="submit" name="go" value="review">Review &amp; submit â†’</button>
+          {% endif %}
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <aside class="exam-sidebar">
+    <div class="card">
+      <strong>Questions</strong>
+      <div class="palette">
+        {% for item in palette %}
+          <button type="submit" form="answer-form" name="go" value="{{ item.question.position }}"
+                  class="{{ item.status }}{% if item.question.position == question.position %} current{% endif %}"
+                  aria-label="Question {{ item.question.position }}, {{ item.status }}"
+                  {% if item.question.position == question.position %}aria-current="step"{% endif %}>{{ item.question.position }}</button>
+        {% endfor %}
+      </div>
+      <div class="legend">
+        <div><span class="answered"></span>Answered ({{ counts.answered }})</div>
+        <div><span class="review"></span>Marked for review ({{ counts.review }})</div>
+        <div><span></span>Not answered ({{ counts.unanswered }})</div>
+      </div>
+      <button class="btn btn-success sidebar-submit" type="submit" form="answer-form" name="go" value="review">Review &amp; submit</button>
+    </div>
+  </aside>
+</div>
+
+<form id="expire-form" method="post" action="{% url 'examinations:attempt-submit' attempt.id %}" hidden>{% csrf_token %}</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="{% static 'js/exam-net.js' %}"></script>
+<script>
+(function () {
+  const form = document.getElementById('answer-form');
+  const status = document.getElementById('save-status');
+  const timer = document.getElementById('timer');
+  const alertBox = document.getElementById('time-alert');
+  const announcements = document.getElementById('announcements');
+  const position = {{ question.position }};
+  let deadline = Date.now() + {{ remaining_seconds }} * 1000;
+  let saveTimer = null;
+  let navigating = false;
+  let lastAnnouncement = 0;
+  announcements.querySelectorAll('[data-id]').forEach(function (el) { lastAnnouncement = Math.max(lastAnnouncement, +el.dataset.id); });
+
+  function finishNow() {
+    if (navigating) return;
+    navigating = true;
+    document.getElementById('expire-form').submit();
+  }
+
+  const net = ExamNet({
+    attemptId: {{ attempt.id }},
+    saveUrl: "{% url 'examinations:attempt-save-answer' attempt.id 0 %}",
+    pollUrl: "{% url 'examinations:attempt-poll' attempt.id %}",
+    csrf: "{{ csrf_token }}",
+    netEl: document.getElementById('net-status'),
+    lastAnnouncement: function () { return lastAnnouncement; },
+    onStatus: function (quality, pending, flushing) {
+      status.classList.toggle('error', quality !== 'online' && pending > 0);
+      if (flushing) { status.textContent = 'Saving…'; }
+      else if (quality === 'offline' && pending) { status.textContent = 'Offline (will retry). ' + pending + ' answer' + (pending > 1 ? 's' : '') + ' waiting to sync'; }
+      else if (quality === 'unstable' && pending) { status.textContent = 'Unstable connection. Retrying…'; }
+    },
+    onSaved: function (item, body) {
+      if (item.position === position) {
+        status.textContent = 'Saved at ' + body.saved_at;
+        status.classList.remove('error');
+        const current = document.querySelector('.palette .current');
+        if (current) { current.classList.remove('answered', 'review', 'unanswered'); current.classList.add(body.status); }
+      }
+    },
+    onRejected: function (item, message) {
+      status.textContent = message || 'An answer was rejected by the server.';
+      status.classList.add('error');
+    },
+    onDeadlinePassed: function () {
+      status.textContent = 'The deadline has passed. Answers made after it were not accepted.';
+      status.classList.add('error');
+      setTimeout(finishNow, 1500);
+    },
+    onHeartbeat: function (body) {
+      // The server clock is authoritative: resync the countdown on every heartbeat.
+      if (body.status && body.status !== 'IN_PROGRESS') { finishNow(); return; }
+      deadline = Date.now() + body.remaining_seconds * 1000;
+      (body.announcements || []).forEach(function (a) {
+        if (a.id <= lastAnnouncement) return;
+        lastAnnouncement = a.id;
+        const div = document.createElement('div');
+        div.className = 'announcement';
+        div.dataset.id = a.id;
+        const label = document.createElement('strong');
+        label.textContent = 'Examiner announcement (' + a.at + '): ';
+        div.appendChild(label);
+        div.appendChild(document.createTextNode(a.message));
+        announcements.appendChild(div);
+      });
+    },
+  });
+
+  function currentFields() {
+    return {
+      choice: Array.from(form.querySelectorAll('input[name=choice]:checked')).map(function (i) { return i.value; }),
+      written_response: (form.querySelector('textarea[name=written_response]') || { value: '' }).value,
+      marked_for_review: form.querySelector('input[name=marked_for_review]').checked,
+    };
+  }
+
+  // Restore answers that were typed offline or before a refresh and not yet synced.
+  (function restore() {
+    const queued = net.queuedFor(position);
+    if (!queued) return;
+    const wanted = (queued.fields.choice || []).map(String);
+    form.querySelectorAll('input[name=choice]').forEach(function (i) { i.checked = wanted.indexOf(i.value) !== -1; });
+    const ta = form.querySelector('textarea[name=written_response]');
+    if (ta) ta.value = queued.fields.written_response || '';
+    form.querySelector('input[name=marked_for_review]').checked = !!queued.fields.marked_for_review;
+  })();
+
+  function refreshChoiceStyles() {
+    form.querySelectorAll('.choice').forEach(function (label) {
+      label.classList.toggle('selected', label.querySelector('input').checked);
+    });
+  }
+  refreshChoiceStyles();
+
+  function save() {
+    net.enqueue(position, currentFields());
+    status.textContent = net.isOnline() ? 'Saving…' : 'Offline (will retry)';
+    net.flush();
+  }
+  function scheduleSave(delay) { clearTimeout(saveTimer); saveTimer = setTimeout(save, delay); }
+
+  form.addEventListener('change', function () { refreshChoiceStyles(); scheduleSave(300); });
+  const textarea = document.getElementById('written_response');
+  if (textarea) {
+    const counter = document.getElementById('char-count');
+    textarea.addEventListener('input', function () { counter.textContent = textarea.value.length; status.textContent = 'Unsaved changes'; scheduleSave(1500); });
+  }
+  const clear = document.getElementById('clear-choice');
+  if (clear) {
+    clear.addEventListener('click', function () {
+      form.querySelectorAll('input[name=choice]').forEach(function (i) { i.checked = false; });
+      refreshChoiceStyles();
+      scheduleSave(0);
+    });
+  }
+
+  // Navigation submits a normal request. While offline it cannot load another page,
+  // so the answer is queued and the candidate stays here.
+  form.addEventListener('submit', function (e) {
+    clearTimeout(saveTimer);
+    if (!net.isOnline()) {
+      e.preventDefault();
+      net.enqueue(position, currentFields());
+      status.textContent = 'Offline (will retry). Your answer is kept on this device. Reconnect to move on.';
+      status.classList.add('error');
+      return;
+    }
+    document.getElementById('client-seq').value = net.nextSeq();
+    navigating = true;
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (!e.altKey) return;
+    const target = e.key === 'ArrowRight' ? form.querySelector('button[value=next], button[value=review]')
+                 : e.key === 'ArrowLeft' ? form.querySelector('button[value=previous]:not([disabled])') : null;
+    if (target) { e.preventDefault(); target.click(); }
+  });
+
+  // Countdown. The server enforces the real deadline; this only displays it.
+  let warned5 = false, warned1 = false;
+  function tick() {
+    const left = Math.max(0, Math.round((deadline - Date.now()) / 1000));
+    const h = Math.floor(left / 3600), m = Math.floor((left % 3600) / 60), s = left % 60;
+    timer.textContent = (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(s).padStart(2, '0');
+    timer.classList.toggle('warning', left <= 300 && left > 60);
+    timer.classList.toggle('critical', left <= 60);
+    if (left <= 300 && left > 60 && !warned5) { warned5 = true; alertBox.textContent = 'Five minutes remaining.'; }
+    if (left <= 60 && left > 0 && !warned1) { warned1 = true; alertBox.textContent = 'One minute remaining.'; }
+    if (left <= 0) {
+      status.textContent = 'Time is up. Finalising with the server…';
+      net.flush().then(finishNow, finishNow);
+      return;
+    }
+    setTimeout(tick, 1000);
+  }
+  tick();
+  net.start();
+})();
+</script>
+{% endblock %}

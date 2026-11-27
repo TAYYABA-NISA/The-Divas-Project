@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}Monitoring consent | {{ attempt.examination.title }}{% endblock %}
+{% block content %}
+<section class="card" aria-labelledby="consent-title">
+  <p class="eyebrow">Candidate · {{ attempt.examination.title }}</p>
+  <h1 id="consent-title">Monitoring notice</h1>
+  <p>Monitoring is optional for the examination workflow. It creates advisory flags for an examiner to review and never changes your score automatically.</p>
+  <h2>What the local agent may send</h2>
+  <ul>
+    <li>Advisory events such as a prolonged gaze away, no face, multiple faces, or a phone.</li>
+    <li>Short private evidence clips only when an event is flagged.</li>
+    <li>Hashed Bluetooth device identifiers and RSSI readings for an optional baseline.</li>
+  </ul>
+  <p class="notice">Lighting, glasses, head coverings, camera position, and noisy Bluetooth signals can produce false flags. Flags are hints for human review, not proof of misconduct.</p>
+  {% if agent_token %}
+    <div class="notice success" role="status">
+      <strong>Consent recorded.</strong> Copy this one-time token into the local agent now. It is not shown again and expires when your attempt ends.
+      <code>{{ agent_token }}</code>
+    </div>
+  {% else %}
+    <form method="post">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div class="field">{{ form.consent }} <label for="{{ form.consent.id_for_label }}">{{ form.consent.label }}</label>{{ form.consent.errors }}</div>
+      <button class="btn btn-primary" type="submit">Accept monitoring notice</button>
+    </form>
+  {% endif %}
+</section>
+{% endblock %}

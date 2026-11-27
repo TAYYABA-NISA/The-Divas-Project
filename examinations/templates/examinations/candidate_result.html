@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}My result | {{ attempt.examination.title }}{% endblock %}
+{% block content %}
+<p><a href="{% url 'examinations:candidate-dashboard' %}">← My examinations</a></p>
+<h1>{{ attempt.examination.title }}</h1>
+<div class="card center-card">
+  <p class="muted">Your score</p>
+  <p class="big-score">{{ attempt.total_score|floatformat:"-2" }} / {{ attempt.total_marks|default:attempt.examination.total_marks|floatformat:"-2" }}</p>
+</div>
+<h2>Marks by question</h2>
+<table>
+  <thead><tr><th>#</th><th>Question</th><th>Your marks</th><th>Examiner feedback</th></tr></thead>
+  <tbody>
+  {% for item in items %}
+    <tr>
+      <td>{{ item.question.position }}</td>
+      <td>{{ item.question.prompt|truncatewords:18 }}</td>
+      <td>{{ item.answer.awarded_marks|default:"0"|floatformat:"-2" }} / {{ item.question.marks|floatformat:"-2" }}</td>
+      <td>{{ item.answer.grader_feedback|default:"-" }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

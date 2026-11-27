@@ -1,0 +1,2 @@
+{% extends 'base.html' %}
+{% block content %}<h1>Assign questions: {{ exam.title }}</h1><p>Select questions from your question bank. Assigned questions cannot be changed once published.</p><form method="post">{% csrf_token %}{{ form.as_p }}<button type="submit">Assign selected questions</button></form>{% endblock %}

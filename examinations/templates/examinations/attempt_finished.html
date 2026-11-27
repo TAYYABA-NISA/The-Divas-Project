@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}Examination submitted | Exam Platform{% endblock %}
+{% block content %}
+<div class="card center-card">
+  <div class="icon" aria-hidden="true">✓</div>
+  <h1>Examination submitted</h1>
+  <p>Your attempt for <strong>{{ attempt.examination.title }}</strong> was
+    {% if attempt.status == 'EXPIRED' %}submitted automatically when time ran out{% else %}submitted{% endif %}
+    {% if attempt.submitted_at %}at {{ attempt.submitted_at|date:"H:i, d M Y" }}{% endif %}.</p>
+  <p class="muted">Your results will appear once the examiner has reviewed and published them.</p>
+  <a class="btn btn-primary" href="{% url 'examinations:candidate-dashboard' %}">Back to my examinations</a>
+</div>
+{% endblock %}

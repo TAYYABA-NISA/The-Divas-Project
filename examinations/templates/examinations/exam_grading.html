@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}Grading | {{ exam.title }}{% endblock %}
+{% block content %}
+<p><a href="{% url 'examinations:exam-detail' exam.id %}">← {{ exam.title }}</a></p>
+<h1>Grading and results</h1>
+<p class="muted">Objective answers are marked automatically. Written responses need marks from you. Results can be published once the window has closed and nothing is waiting for marks.</p>
+
+{% if rows %}
+<table>
+  <thead><tr><th>Candidate</th><th>Status</th><th>Score</th><th>Waiting for marks</th><th></th></tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td>{{ row.attempt.candidate.get_full_name|default:row.attempt.candidate.username }}</td>
+      <td>{% if row.attempt.status == 'EXPIRED' %}Time expired{% else %}Submitted{% endif %}</td>
+      <td>{{ row.attempt.total_score|floatformat:"-2" }} / {{ row.attempt.total_marks|default:exam.total_marks|floatformat:"-2" }}</td>
+      <td>{% if row.pending %}<span class="pill pill-amber">{{ row.pending }} written</span>{% else %}<span class="pill pill-green">Complete</span>{% endif %}</td>
+      <td><a class="btn btn-small" href="{% url 'examinations:attempt-grading' exam.id row.attempt.id %}">{% if row.pending %}Grade{% else %}Review{% endif %}</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="empty">No submitted attempts yet.</p>{% endif %}
+
+<h2>Publication</h2>
+{% if exam.results_published %}
+  <p class="notice-ok">Results were published on {{ exam.results_published_at|date:"d M Y, H:i" }}. Candidates see only their own result. You can still correct marks; totals update immediately.</p>
+{% else %}
+  {% if problems %}
+    <div class="notice"><strong>Not ready to publish:</strong><ul>{% for p in problems %}<li>{{ p }}</li>{% endfor %}</ul></div>
+  {% endif %}
+  <form method="post" action="{% url 'examinations:exam-publish-results' exam.id %}" onsubmit="return confirm('Publish results? Candidates will be able to see their scores.');">
+    {% csrf_token %}
+    <p><label><input type="checkbox" name="confirm" value="yes" required> I have reviewed these results.</label></p>
+    <button class="btn btn-success" type="submit" {% if problems %}disabled{% endif %}>Publish results</button>
+  </form>
+{% endif %}
+<p><a href="{% url 'examinations:exam-analytics' exam.id %}">View analytics</a></p>
+{% endblock %}

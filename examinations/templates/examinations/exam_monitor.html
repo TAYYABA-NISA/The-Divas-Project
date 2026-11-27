@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block title %}Monitor | {{ exam.title }}{% endblock %}
+{% block content %}
+<p><a href="{% url 'examinations:exam-detail' exam.id %}">← {{ exam.title }}</a></p>
+<h1>Monitoring</h1>
+<p class="notice">Indicators on this page are hints for human review. They are not conclusive evidence of misconduct. Connection status only shows whether the candidate's page contacted the server recently.</p>
+
+<h2>Attempts</h2>
+{% if rows %}
+<table>
+  <thead><tr><th>Candidate</th><th>Status</th><th>Progress</th><th>Connection</th><th>Last answer saved</th></tr></thead>
+  <tbody>
+  {% for row in rows %}
+    <tr>
+      <td>{{ row.candidate.get_full_name|default:row.candidate.username }}</td>
+      <td>{% if row.status == 'NOT_STARTED' %}<span class="pill pill-grey">Not started</span>
+          {% elif row.status == 'IN_PROGRESS' %}<span class="pill pill-blue">In progress</span>
+          {% elif row.status == 'SUBMITTED' %}<span class="pill pill-green">Submitted</span>
+          {% else %}<span class="pill pill-amber">Time expired</span>{% endif %}</td>
+      <td>{% if row.total %}{{ row.answered }} of {{ row.total }} answered{% else %}-{% endif %}</td>
+      <td>{{ row.connection|default:"-" }}</td>
+      <td>{% if row.attempt and row.attempt.last_seen_at %}{{ row.attempt.last_seen_at|time:"H:i:s" }}{% else %}-{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="muted">Reload this page to refresh.</p>
+{% else %}<p class="empty">No candidates are enrolled.</p>{% endif %}
+
+<div class="two-col">
+  <form method="post" action="{% url 'examinations:exam-announce' exam.id %}" class="card">
+    {% csrf_token %}
+    <h2>Announcement to all candidates</h2>
+    <p><label for="{{ announcement_form.message.id_for_label }}">{{ announcement_form.message.label }}</label><br>{{ announcement_form.message }}</p>
+    <button class="btn btn-primary" type="submit">Send announcement</button>
+  </form>
+  <form method="post" action="{% url 'examinations:exam-incident' exam.id %}" class="card">
+    {% csrf_token %}
+    <h2>Record an observation</h2>
+    <p><label for="{{ incident_form.attempt.id_for_label }}">{{ incident_form.attempt.label }}</label><br>{{ incident_form.attempt }}</p>
+    <p><label for="{{ incident_form.message.id_for_label }}">{{ incident_form.message.label }}</label><br>{{ incident_form.message }}</p>
+    <button class="btn" type="submit">Save observation</button>
+  </form>
+</div>
+
+<h2>Recent events</h2>
+{% if events %}
+<table>
+  <thead><tr><th>Time</th><th>Type</th><th>Candidate</th><th>Message</th><th>By</th></tr></thead>
+  <tbody>
+  {% for event in events %}
+    <tr>
+      <td>{{ event.created_at|date:"d M, H:i:s" }}</td>
+      <td>{{ event.get_event_type_display }}</td>
+      <td>{% if event.attempt %}{{ event.attempt.candidate.get_full_name|default:event.attempt.candidate.username }}{% else %}Everyone{% endif %}</td>
+      <td>{{ event.message }}</td>
+      <td>{{ event.created_by.get_full_name|default:event.created_by.username }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}<p class="empty">No announcements or observations yet.</p>{% endif %}
+{% endblock %}

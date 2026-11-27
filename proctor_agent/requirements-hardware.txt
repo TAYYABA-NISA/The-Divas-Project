@@ -1,0 +1,7 @@
+# Optional future live-detector dependencies. Not required for --simulate.
+opencv-python>=4.10,<5
+mediapipe>=0.10,<1
+ultralytics>=8.3,<9
+mss>=10,<11
+bleak>=0.22,<1
+numpy>=1.26,<3

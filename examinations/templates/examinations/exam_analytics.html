@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+{% block title %}Analytics | {{ exam.title }}{% endblock %}
+{% block content %}
+<p><a href="{% url 'examinations:exam-detail' exam.id %}">← {{ exam.title }}</a></p>
+<h1>Analytics</h1>
+<p class="muted">Based on {{ summary.attempted }} submitted attempt{{ summary.attempted|pluralize }} out of {{ summary.enrolled }} enrolled candidate{{ summary.enrolled|pluralize }}.</p>
+
+{% if not summary.attempted %}
+  <p class="empty">No submitted attempts yet, so there is nothing to analyse.</p>
+{% else %}
+<div class="stat-grid">
+  <div><strong>{{ summary.mean|floatformat:"-2" }}</strong>Mean</div>
+  <div><strong>{{ summary.median|floatformat:"-2" }}</strong>Median</div>
+  <div><strong>{{ summary.highest|floatformat:"-2" }}</strong>Highest</div>
+  <div><strong>{{ summary.lowest|floatformat:"-2" }}</strong>Lowest</div>
+  <div><strong>{{ summary.total_marks|floatformat:"-2" }}</strong>Total marks</div>
+</div>
+
+<h2>Score distribution</h2>
+<table class="bars">
+  <caption class="sr-only">Number of candidates in each score band</caption>
+  <tbody>
+  {% for bucket in distribution %}
+    <tr><th scope="row">{{ bucket.label }}</th><td><span class="bar" style="width: {{ bucket.width }}%"></span> {{ bucket.count }}</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Question analytics</h2>
+<p class="muted">Observed difficulty needs at least 3 scored responses. Easy means 70% or more answered fully correctly, hard means under 40%. Unanswered questions count as incorrect.</p>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Question</th><th>Shown</th><th>Skipped</th><th>Fully correct</th><th>Most chosen wrong option</th><th>Labelled</th><th>Observed</th></tr></thead>
+  <tbody>
+  {% for q in questions %}
+    <tr>
+      <td>{{ q.prompt|truncatewords:14 }}</td>
+      <td>{{ q.shown }}</td>
+      <td>{{ q.skipped }} ({% widthratio q.skip_rate 1 100 %}%)</td>
+      <td>{% if q.correct_rate is None %}-{% else %}{% widthratio q.correct_rate 1 100 %}%{% endif %}{% if q.ungraded %}<br><span class="muted">{{ q.ungraded }} ungraded</span>{% endif %}</td>
+      <td>{% if q.top_wrong %}{{ q.top_wrong.text }} ({{ q.top_wrong.count }}){% else %}-{% endif %}</td>
+      <td>{{ q.labelled|title|default:"-" }}</td>
+      <td>{% if q.observed %}{{ q.observed|title }}{% if q.mismatch %} <span class="pill pill-amber">Differs from label</span>{% endif %}{% else %}Not enough data{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+
+<div class="actions">
+  <a class="btn" href="{% url 'examinations:exam-analytics-csv' exam.id %}?kind=questions">Download question analytics (CSV)</a>
+  <a class="btn" href="{% url 'examinations:exam-analytics-csv' exam.id %}?kind=scores">Download scores (CSV)</a>
+</div>
+{% endif %}
+{% endblock %}

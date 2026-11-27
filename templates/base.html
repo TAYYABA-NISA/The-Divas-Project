@@ -1,0 +1,38 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Exam Platform{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+  {% block header %}
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="{% url 'accounts:dashboard' %}">Exam Platform</a>
+      {% if user.is_authenticated %}
+        <nav aria-label="Main">
+          {% if user.is_examiner %}<a href="{% url 'examinations:exam-list' %}">Examinations</a><a href="{% url 'examinations:question-list' %}">Question bank</a>{% endif %}
+          {% if user.is_candidate %}<a href="{% url 'examinations:candidate-dashboard' %}">My examinations</a>{% endif %}
+          {% if user.is_administrator %}<a href="{% url 'admin:index' %}">Administration</a>{% endif %}
+        </nav>
+        <div class="user">
+          <span>{{ user.get_full_name|default:user.username }}</span>
+          <span class="role-badge">{{ user.get_role_display }}</span>
+          <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn btn-small" type="submit">Sign out</button></form>
+        </div>
+      {% endif %}
+    </div>
+  </header>
+  {% endblock %}
+  {% block body %}
+  <main class="container">
+    {% if messages %}<ul class="messages">{% for message in messages %}<li class="{{ message.tags }}">{{ message }}</li>{% endfor %}</ul>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  {% endblock %}
+  {% block scripts %}{% endblock %}
+</body>
+</html>
