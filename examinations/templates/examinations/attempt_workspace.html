@@ -111,6 +111,7 @@
         <button class="btn btn-small" type="submit">Save preferences</button><span id="preferences-status" class="save-status" role="status" aria-live="polite"></span>
       </form>
     </details>
+    {% if not attempt.is_sandbox %}<p><a class="btn btn-small" href="{% url 'proctoring:consent' attempt.id %}">Monitoring consent and agent setup</a></p>{% endif %}
   </aside>
 </div>
 

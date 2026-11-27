@@ -38,6 +38,7 @@ def masked_name(user):
 
 
 def candidate_report_data(attempt):
+    attempt = Attempt.all_objects.select_related("examination", "candidate").get(pk=attempt.pk)
     if attempt.is_sandbox or not attempt.examination.results_published:
         raise PermissionDenied("Only published real results can be issued as reports.")
     total = attempt.total_marks if attempt.total_marks is not None else attempt.examination.total_marks
@@ -69,21 +70,22 @@ def issue_report(*, report_type, examination, attempt=None):
         if attempt is None or attempt.examination_id != examination.id:
             raise ValidationError("A result report must match its examination attempt.")
         data = candidate_report_data(attempt)
-        VerifiedReport.objects.filter(
-            attempt=attempt, report_type=report_type, status=VerifiedReport.Status.VALID
-        ).update(status=VerifiedReport.Status.SUPERSEDED)
+        current = VerifiedReport.objects.filter(attempt=attempt, report_type=report_type, status=VerifiedReport.Status.VALID, data_hash=_canonical_hash(data)).first()
+        if current:
+            return current, data
+        VerifiedReport.objects.filter(attempt=attempt, report_type=report_type, status=VerifiedReport.Status.VALID).update(status=VerifiedReport.Status.SUPERSEDED)
     elif report_type == VerifiedReport.Type.EXAMINATION_SUMMARY:
         data = summary_report_data(examination)
-        VerifiedReport.objects.filter(
-            examination=examination, report_type=report_type, status=VerifiedReport.Status.VALID
-        ).update(status=VerifiedReport.Status.SUPERSEDED)
+        current = VerifiedReport.objects.filter(examination=examination, report_type=report_type, status=VerifiedReport.Status.VALID, data_hash=_canonical_hash(data)).first()
+        if current:
+            return current, data
+        VerifiedReport.objects.filter(examination=examination, report_type=report_type, status=VerifiedReport.Status.VALID).update(status=VerifiedReport.Status.SUPERSEDED)
     else:
         raise ValidationError("Unknown report type.")
     return VerifiedReport.objects.create(
         public_id=secrets.token_urlsafe(16), report_type=report_type, attempt=attempt,
         examination=examination, data_hash=_canonical_hash(data),
     ), data
-
 
 def verification_data(report):
     if report.status != VerifiedReport.Status.VALID:

@@ -8,7 +8,7 @@
 <h2>Attempts</h2>
 {% if rows %}
 <table>
-  <thead><tr><th>Candidate</th><th>Status</th><th>Progress</th><th>Connection</th><th>Last answer saved</th></tr></thead>
+  <thead><tr><th>Candidate</th><th>Status</th><th>Progress</th><th>Connection</th><th>Last answer saved</th><th>Advisory flags</th></tr></thead>
   <tbody>
   {% for row in rows %}
     <tr>
@@ -20,6 +20,7 @@
       <td>{% if row.total %}{{ row.answered }} of {{ row.total }} answered{% else %}-{% endif %}</td>
       <td>{{ row.connection|default:"-" }}</td>
       <td>{% if row.attempt and row.attempt.last_seen_at %}{{ row.attempt.last_seen_at|time:"H:i:s" }}{% else %}-{% endif %}</td>
+      <td>{% if row.attempt %}<a class="btn btn-small" href="{% url 'proctoring:event-timeline' row.attempt.id %}">Review flags</a>{% else %}-{% endif %}</td>
     </tr>
   {% endfor %}
   </tbody>

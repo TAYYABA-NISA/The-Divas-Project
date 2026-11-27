@@ -7,9 +7,12 @@ A Django 5.1 examination platform for the Technoverse Web-e-Thon. Institutions c
 - Role-aware sign-in and backend-protected examiner and candidate workflows.
 - Exam creation, reusable question bank, candidate enrollment, attempt snapshots, autosave and server-side time limits.
 - Demo data command with fictional accounts and Easy, Medium and Hard questions.
+- Candidate workspace preferences (font size, high contrast, palette position and density) saved server-side, plus a private autosaved scratchpad that is never graded.
+- CSV/JSON question and candidate imports with templates, validation previews, row-level errors and atomic commit.
+- Examiner sandbox previews, excluded from real candidate access, monitoring, grading, analytics, results and reports.
+- Downloadable ReportLab PDFs with QR/manual verification IDs and minimal public verification data.
+- Consent-based proctoring sessions, private examiner-only evidence, advisory event review and a simulated local agent.
 - Implementation plan and requirement traceability in [`.kiro/specs/technoverse-exam-platform/`](.kiro/specs/technoverse-exam-platform/).
-
-The remaining planned functionality includes the eight secondary features, fair difficulty-ratio generation, and optional local proctoring. See the spec task list for delivery status.
 
 ## Prerequisites
 
@@ -85,13 +88,19 @@ python manage.py makemigrations --check --dry-run --settings=exam_platform.setti
 
 ## Optional local proctoring agent
 
-The browser-based web app does not require a webcam, Bluetooth adapter or Gemini. The future local agent has its own dependency list:
+The web app works fully without a webcam, Bluetooth adapter or Gemini. During an in-progress attempt, a candidate can read and accept the monitoring notice. The browser then displays a one-time agent token. Run the lightweight demonstrator from the project folder:
 
 ```powershell
-python -m pip install -r proctor_agent/requirements.txt
+python -m proctor_agent --server http://127.0.0.1:8000 --token <one-time-token> --simulate
 ```
 
-It will provide simulated mode for the deployed demo. Any proctoring signal is advisory only, never changes a score, and must be reviewed by an examiner.
+The simulated agent posts advisory test events only. Hardware dependencies remain optional in `proctor_agent/requirements-hardware.txt`. Evidence is stored in `PROCTOR_EVIDENCE_ROOT`, outside web-served media, and is removed with:
+
+```powershell
+python manage.py cleanup_proctor_evidence
+```
+
+Set `PROCTOR_EVIDENCE_RETENTION_DAYS` to control retention. Monitoring signals are advisory, never change scores, and require an owning examiner to accept or dismiss them with a note. RSSI, gaze, phone and face-related signals can be wrong because of lighting, camera angle, glasses, head coverings, device advertising behavior and noisy radio conditions.
 
 ## Deployment checklist
 

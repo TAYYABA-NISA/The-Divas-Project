@@ -307,7 +307,7 @@ def save_answer(*, attempt: Attempt, attempt_question_id: int, selected_choice_i
     expired = False
     answer = None
     with transaction.atomic():
-        attempt = Attempt.objects.select_for_update().get(pk=attempt.pk)
+        attempt = Attempt.all_objects.select_for_update().get(pk=attempt.pk)
         if not attempt.can_accept_answers(now):
             expire_attempt_if_needed(attempt, now=now)
             expired = True
@@ -344,7 +344,7 @@ def save_answer(*, attempt: Attempt, attempt_question_id: int, selected_choice_i
 def expire_attempt_if_needed(attempt: Attempt, now=None):
     """Finalize an expired attempt under the same row lock as saves and submits."""
     now = now or timezone.now()
-    attempt = Attempt.objects.select_for_update().get(pk=attempt.pk)
+    attempt = Attempt.all_objects.select_for_update().get(pk=attempt.pk)
     if attempt.status == Attempt.Status.IN_PROGRESS and now >= attempt.expires_at:
         return finalize_attempt(attempt, expired=True, now=now)
     return attempt
@@ -389,7 +389,7 @@ def recompute_attempt_total(attempt):
 @transaction.atomic
 def finalize_attempt(attempt: Attempt, *, expired=False, now=None):
     now = now or timezone.now()
-    attempt = Attempt.objects.select_for_update().select_related("examination").get(pk=attempt.pk)
+    attempt = Attempt.all_objects.select_for_update().select_related("examination").get(pk=attempt.pk)
     if attempt.status != Attempt.Status.IN_PROGRESS:
         return attempt
     if not expired and now >= attempt.expires_at:
@@ -474,7 +474,7 @@ def grade_written_answer(*, answer_id, grader, marks, feedback=""):
         attempt=attempt, report_type=VerifiedReport.Type.CANDIDATE_RESULT,
         status=VerifiedReport.Status.VALID,
     ).update(status=VerifiedReport.Status.SUPERSEDED)
-    recompute_attempt_total(Attempt.objects.select_for_update().get(pk=attempt.pk))
+    recompute_attempt_total(Attempt.all_objects.select_for_update().get(pk=attempt.pk))
     return answer
 
 

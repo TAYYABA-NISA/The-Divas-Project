@@ -1,0 +1,25 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ status_code }} · {{ title }}</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body>
+  <main class="error-page" aria-labelledby="error-title">
+    <section class="error-card">
+      <p class="error-code">{{ status_code }} · {{ status_phrase }}</p>
+      <h1 id="error-title">{{ title }}</h1>
+      <p>{{ message }}</p>
+      {% if reference %}
+        <p class="error-reference">Reference: <code>{{ reference }}</code></p>
+      {% endif %}
+      <div class="actions">
+        <a class="btn btn-primary" href="/">Return to dashboard</a>
+        {% if status_code >= 500 and request.method == "GET" %}<a class="btn" href="{{ request.path }}">Try again</a>{% endif %}
+      </div>
+    </section>
+  </main>
+</body>
+</html>

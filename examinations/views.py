@@ -833,6 +833,7 @@ def verify_report(request, public_id=None):
         submitted_id = request.POST.get("public_id", "").strip()
         if submitted_id:
             return redirect("examinations:verify-report", public_id=submitted_id)
-    report = get_object_or_404(VerifiedReport.objects.select_related("attempt__candidate", "examination"), public_id=public_id) if public_id else None
+    report = (VerifiedReport.objects.select_related("attempt__candidate", "examination").filter(public_id=public_id).first() if public_id else None)
     status, data = verification_data(report) if report else (None, None)
-    return render(request, "examinations/verify_report.html", {"report": report, "verification_status": status, "data": data})
+    context = {"report": report, "public_id": public_id, "verification_status": status, "data": data}
+    return render(request, "examinations/verify_report.html", context, status=404 if public_id and report is None else 200)

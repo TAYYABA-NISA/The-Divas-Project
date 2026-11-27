@@ -4,6 +4,11 @@ from django.urls import include, path
 
 from accounts.forms import RoleAuthenticationForm
 
+handler400 = "exam_platform.error_handlers.bad_request"
+handler403 = "exam_platform.error_handlers.permission_denied"
+handler404 = "exam_platform.error_handlers.page_not_found"
+handler500 = "exam_platform.error_handlers.server_error"
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path(

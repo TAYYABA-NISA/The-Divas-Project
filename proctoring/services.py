@@ -78,7 +78,7 @@ def record_consent(*, attempt, candidate, now=None):
     locked_attempt = Attempt.objects.select_for_update().get(pk=attempt.pk)
     if locked_attempt.candidate_id != candidate.id or not candidate.is_candidate:
         raise PermissionDenied("Only the candidate who owns this attempt may consent.")
-    if locked_attempt.status != Attempt.Status.IN_PROGRESS or now > locked_attempt.expires_at:
+    if locked_attempt.status != Attempt.Status.IN_PROGRESS or now >= locked_attempt.expires_at:
         raise ValidationError("Monitoring consent is available only during an active attempt.")
     if ProctorSession.objects.select_for_update().filter(attempt=locked_attempt).exists():
         raise ValidationError("Monitoring consent has already been recorded for this attempt.")
